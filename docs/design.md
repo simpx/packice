@@ -1,17 +1,16 @@
 # PackIce Design & Implementation
 
 ## Objective
-Refine the PackIce architecture to achieve better abstraction and decoupling. The goal is to separate the core logic (Peer, Lease, Object) from the implementation details (Storage, Transport), enabling flexible composition of nodes (e.g., HTTP+FS, UDS+Memfd) and easier future extensions (e.g., Redis-based Lease, S3-based Blob).
+Refine the PackIce architecture to achieve better abstraction and decoupling. The goal is to separate the core logic (Peer, Lease, Object) from the implementation details (Backends, Transport), enabling flexible composition of nodes (e.g., HTTP+FS, UDS+Memfd) and easier future extensions (e.g., Redis-based Lease, S3-based Blob).
 
 ## Architecture Overview
 
-The system is divided into five distinct layers:
+The system is divided into four distinct layers:
 
 1.  **Core Layer**: The logical heart. Manages resources, state, and lifecycle.
-2.  **Storage Layer**: Concrete backends for storage (Blob) and metadata (Lease).
+2.  **Backends Layer**: Concrete implementations for storage (Blob) and metadata (Lease).
 3.  **Transport Layer**: The "Mover". Adapts the Core to network protocols.
-4.  **Server Layer**: The "Assembler". Orchestrates components to form a runnable Node.
-5.  **Interface Layer**: The "Consumer". Provides user-facing SDK and CLI.
+4.  **Interface Layer**: The "Consumer". Provides user-facing SDK and CLI.
 
 ---
 
@@ -44,16 +43,16 @@ Abstracts a contiguous chunk of data.
 
 ---
 
-## 2. Storage Layer (The Backends)
+## 2. Backends Layer (The Implementations)
 
-Located in `packice/storage/`.
+Located in `packice/backends/`.
 
-### Blob Implementations
-- **FileBlob (`storage/fs.py`)**: Stores data in a local file system. Handle is the file path.
-- **MemBlob (`storage/memory.py`)**: Stores data in memory (using `memfd_create` on Linux or `tempfile` on others). Handle is the file descriptor (FD).
+### File System (`backends/fs.py`)
+- **FileBlob**: Stores data in a local file system. Handle is the file path.
 
-### Lease Implementations
-- **MemoryLease (`storage/memory_lease.py`)**: Stores lease state in Python memory. Generates UUIDs internally.
+### Memory (`backends/memory.py`)
+- **MemBlob**: Stores data in memory (using `memfd_create` on Linux or `tempfile` on others). Handle is the file descriptor (FD).
+- **MemoryLease**: Stores lease state in Python memory. Generates UUIDs internally.
 
 ---
 
@@ -64,35 +63,29 @@ Located in `packice/transport/`.
 **Role**: Adapts the Core Peer to specific network protocols.
 **Key Design Principle**: Transports are **Adapters**, not Consumers. They use the `Peer` API directly to get handles and pass them to the client. They do **not** use the SDK Client.
 
-### HTTP Transport (`transport/http_server.py`)
+### HTTP Transport (`transport/http.py`)
 - **Protocol**: JSON over HTTP.
 - **Mechanism**: Returns file paths (handles) in JSON.
 - **Use Case**: Networked nodes, shared storage (NFS/Volume).
+- **Components**: `HttpServer`, `HttpTransportClient`.
 
-### UDS Transport (`transport/uds_server.py`)
+### UDS Transport (`transport/uds.py`)
 - **Protocol**: JSON over Unix Domain Sockets.
 - **Mechanism**: Uses `SCM_RIGHTS` to pass File Descriptors (FDs) between processes.
 - **Use Case**: Local high-performance IPC, container sidecars.
+- **Components**: `UdsServer`, `UdsTransportClient`.
 
 ---
 
-## 4. Server Layer (The Assembler)
+## 4. Interface Layer (The Consumer)
 
-Located in `packice/server/`.
+Located in the root `packice/` package.
 
-### Node (`server/node.py`)
-- **Role**: Encapsulates the logic of assembling a Peer with specific Storage and Transport components.
+### Node (`node.py`)
+- **Role**: Encapsulates the logic of assembling a Peer with specific Backend and Transport components.
 - **Responsibility**: Handles configuration, initialization, and lifecycle management (start/stop) of the server.
 
----
-
-## 5. Interface Layer (The Consumer)
-
-Located in `packice/interface/`.
-
-**Role**: Provides the public face of the system.
-
-### SDK (`interface/sdk.py`)
+### Client (`client.py`)
 - **Unified Entry Point**: `packice.connect(target)`.
 - **Auto-Detection**:
     - `connect()`: Creates a private, isolated in-memory Peer.
@@ -101,9 +94,9 @@ Located in `packice/interface/`.
     - `connect("/tmp/...")`: Connects to a local UDS Peer.
 - **Direct Access**: Can wrap a `Peer` instance directly (`DirectTransportClient`) for zero-overhead in-process usage.
 
-### CLI (`interface/cli.py`)
+### CLI (`cli.py`)
 - **Role**: The command-line interface for starting the server.
-- **Usage**: `python -m packice.interface.cli --impl fs --transport http`
+- **Usage**: `python -m packice.cli --impl fs --transport http`
 
 ---
 
@@ -113,7 +106,7 @@ Located in `packice/interface/`.
 Ideal for single-process applications or testing. No network overhead.
 
 ```python
-import packice.interface.sdk as packice
+import packice
 
 # Private instance
 client = packice.connect()
@@ -129,20 +122,17 @@ Ideal for multi-process applications or distributed systems. Requires a Server p
 **Server (Process A):**
 ```bash
 # Start a UDS node with Memory storage
-python3 -m packice.interface.cli --impl mem --transport uds --socket /tmp/packice.sock
+python3 -m packice.cli --impl mem --transport uds --socket /tmp/packice.sock
 ```
 
 **Client (Process B):**
 ```python
-import packice.interface.sdk as pa
-### CLI (`interface/cli.py`)
-- **Role**: The command-line interface fon and FD reception transparently
+import packice
+
+# Connects to UDS socket, handles JSON and FD reception transparently
 client = packice.connect("/tmp/packice.sock")
 
-le- **Usage**: `pyire(intent="create")
-with lease.open("wb") as f
----
-
-## Usage Patterns
-
-### 1. In-Process (DuckDB St
+lease = client.acquire(intent="create")
+with lease.open("wb") as f:
+    f.write(b"data")
+```

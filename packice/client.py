@@ -1,50 +1,19 @@
 from typing import Any, Dict, Optional, IO, List, Union, Tuple
 import os
-from ..transport.base import TransportClient
-from ..transport.http_client import HttpTransportClient
-from ..transport.uds_client import UdsTransportClient
-from ..core.lease import AccessType
+from .interface.base import Interface
+from .interface.http import HttpInterface
+from .interface.uds import UdsInterface
+from .interface.direct import DirectInterface
 
 # Forward declaration for type hinting
 try:
-    from ..core.peer import Peer
+    from .core.peer import Peer
 except ImportError:
     Peer = Any
 
-class DirectTransportClient(TransportClient):
-    def __init__(self, peer: Peer):
-        self.peer = peer
-
-    def acquire(self, object_id: Optional[str], intent: str, ttl: Optional[float] = None, meta: Optional[Dict] = None) -> Tuple[Dict, List[Any]]:
-        access = AccessType.CREATE if intent == 'create' else AccessType.READ
-        lease, obj = self.peer.acquire(object_id, access, ttl, meta)
-        
-        handles = []
-        for b in obj.blobs:
-            h = b.get_handle()
-            if isinstance(h, int):
-                # Duplicate FD for the client so they own their copy
-                handles.append(os.dup(h))
-            else:
-                handles.append(h)
-                
-        info = {
-            "lease_id": lease.lease_id,
-            "object_id": lease.object_id,
-            "intent": intent,
-            "ttl_seconds": ttl
-        }
-        return info, handles
-
-    def seal(self, lease_id: str) -> None:
-        self.peer.seal(lease_id)
-
-    def release(self, lease_id: str) -> None:
-        self.peer.release(lease_id)
-
 class Lease:
-    def __init__(self, transport: TransportClient, info: Dict, handles: List[Any]):
-        self.transport = transport
+    def __init__(self, interface: Interface, info: Dict, handles: List[Any]):
+        self.interface = interface
         self.info = info
         self.handles = handles
         self.lease_id = info['lease_id']
@@ -83,10 +52,10 @@ class Lease:
             raise ValueError(f"Unknown handle type: {type(handle)}")
 
     def seal(self):
-        self.transport.seal(self.lease_id)
+        self.interface.seal(self.lease_id)
 
     def release(self):
-        self.transport.release(self.lease_id)
+        self.interface.release(self.lease_id)
         # If handles are FDs, close them
         for handle in self.handles:
             if isinstance(handle, int):
@@ -99,31 +68,30 @@ class Client:
     def __init__(self, target: Union[str, Peer]):
         """
         Initialize Client with an address or a Peer instance.
-        If target is a Peer instance, uses DirectTransportClient.
+        If target is a Peer instance, uses DirectInterface.
         If target is a string:
-            If starts with http:// or https://, uses HTTP transport.
+            If starts with http:// or https://, uses HTTP interface.
             Otherwise, assumes it's a UDS socket path.
         """
         if isinstance(target, str):
             if target.startswith("http://") or target.startswith("https://"):
-                self.transport = HttpTransportClient(target)
+                self.interface = HttpInterface(target)
             else:
-                self.transport = UdsTransportClient(target)
+                self.interface = UdsInterface(target)
         else:
             # Assume it's a Peer instance
-            self.transport = DirectTransportClient(target)
+            self.interface = DirectInterface(target)
 
     def acquire(self, object_id: Optional[str] = None, intent: str = "read", ttl: int = 60, meta: dict = None) -> Lease:
-        info, handles = self.transport.acquire(object_id, intent, ttl, meta)
-        return Lease(self.transport, info, handles)
+        info, handles = self.interface.acquire(object_id, intent, ttl, meta)
+        return Lease(self.interface, info, handles)
 
 # Global registry for named in-process peers
 _LOCAL_PEERS: Dict[str, Any] = {}
 
 def _create_default_peer() -> Peer:
-    from ..core.peer import Peer
-    from ..storage.memory import MemBlob
-    from ..storage.memory_lease import MemoryLease
+    from .core.peer import Peer
+    from .backends.memory import MemBlob, MemoryLease
     
     return Peer(
         blob_factory=lambda oid: MemBlob(oid),

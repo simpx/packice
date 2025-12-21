@@ -1,12 +1,11 @@
 import os
 import time
 from typing import Optional
-from ..core.peer import Peer
-from ..storage.fs import FileBlob
-from ..storage.memory import MemBlob
-from ..storage.memory_lease import MemoryLease
-from ..transport.http_server import HttpServer
-from ..transport.uds_server import UdsServer
+from .core.peer import Peer
+from .backends.fs import FileBlob
+from .backends.memory import MemBlob, MemoryLease
+from .interface.http import HttpServer
+from .interface.uds import UdsServer
 
 class Node:
     def __init__(self, impl: str = "fs", transport: str = "http", 

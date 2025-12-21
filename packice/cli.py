@@ -1,7 +1,7 @@
 import argparse
 import time
 import sys
-from ..server.node import Node
+from .node import Node
 
 def main():
     parser = argparse.ArgumentParser(description="PackIce Node")

@@ -1,37 +1,30 @@
 import os
 import sys
 import time
-from ..sdk import Client
-from ..core.peer import Peer
-from ..impl.mem_blob import MemBlob
-from ..impl.memory_lease import MemoryLease
+import packice.v2.interface.sdk as packice
 
 def demo_in_process():
-    print(f"\n{'='*20} Running Demo: In-Process (Direct) {'='*20}")
+    print(f"\n{'='*20} Running Demo: In-Process (DuckDB Style) {'='*20}")
     
-    # 1. Setup Peer (In-Memory)
-    print("Initializing Peer with MemBlob and MemoryLease...")
-    def blob_factory(oid): return MemBlob(oid)
-    def lease_factory(oid, access, ttl): return MemoryLease(oid, access, ttl)
-    peer = Peer(blob_factory, lease_factory)
+    # 1. Connect to a shared in-memory peer
+    print("Connecting to 'memory://demo'...")
+    client1 = packice.connect("memory://demo")
     
-    # 2. Use SDK with Peer instance
-    client = Client(peer)
-    
-    # 3. Create Object
-    print("\n--- Create Object ---")
-    lease = client.acquire(intent="create")
+    # 2. Create Object with Client 1
+    print("\n--- Client 1: Create Object ---")
+    lease = client1.acquire(intent="create")
     object_id = lease.object_id
     print(f"Acquired lease: {lease.lease_id} for object {object_id}")
     
     with lease.open("wb") as f:
-        f.write(b"Hello In-Process!")
+        f.write(b"Hello Shared Memory!")
     lease.seal()
     lease.release()
     
-    # 4. Read Object
-    print(f"\n--- Read Object {object_id} ---")
-    lease = client.acquire(object_id=object_id, intent="read")
+    # 3. Read Object with Client 2 (Simulating another connection to same peer)
+    print("\n--- Client 2: Read Object ---")
+    client2 = packice.connect("memory://demo")
+    lease = client2.acquire(object_id=object_id, intent="read")
     with lease.open("rb") as f:
         data = f.read()
         print(f"Read data: {data}")
@@ -42,7 +35,7 @@ def run_demo(target: str, name: str):
     print(f"Connecting to: {target}")
     
     try:
-        client = Client(target)
+        client = packice.connect(target)
     except Exception as e:
         print(f"Failed to connect: {e}")
         return
@@ -94,8 +87,8 @@ def main():
 
     # Check if servers are running
     print("\nNote: For Networked demos, ensure you have started the servers:")
-    print("  1. python3 -m packice.v2.main --impl fs --transport http --port 8080")
-    print("  2. python3 -m packice.v2.main --impl mem --transport uds --socket /tmp/packice.sock")
+    print("  1. python3 -m packice.v2.interface.cli --impl fs --transport http --port 8080")
+    print("  2. python3 -m packice.v2.interface.cli --impl mem --transport uds --socket /tmp/packice.sock")
     print("Waiting 2 seconds...")
     time.sleep(2)
 

@@ -1,3 +1,3 @@
-"""PackIce v0 node implementation."""
+"""PackIce packaging."""
 
-__all__ = ["server"]
+__all__ = ["v0", "v1"]

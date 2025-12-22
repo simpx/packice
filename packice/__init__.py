@@ -1,6 +1,5 @@
 """PackIce packaging."""
 
-from .client import Client, connect
-from .node import Node
+from .interface.client import Client, connect
 
-__all__ = ["Client", "connect", "Node", "backends", "transport"]
+__all__ = ["Client", "connect", "backends", "transport", "peers"]

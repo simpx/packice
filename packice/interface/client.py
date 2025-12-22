@@ -1,13 +1,13 @@
 from typing import Any, Dict, Optional, IO, List, Union, Tuple
 import os
-from .transport.base import Transport
-from .transport.http import HttpTransport
-from .transport.uds import UdsTransport
-from .transport.direct import DirectTransport
+from ..transport.base import Transport
+from ..transport.http import HttpTransport
+from ..transport.uds import UdsTransport
+from ..transport.direct import DirectTransport
 
 # Forward declaration for type hinting
 try:
-    from .core.peer import Peer
+    from ..core.peer import Peer
 except ImportError:
     Peer = Any
 
@@ -90,13 +90,9 @@ class Client:
 _LOCAL_PEERS: Dict[str, Any] = {}
 
 def _create_default_peer() -> Peer:
-    from .core.peer import Peer
-    from .backends.memory import MemBlob, MemoryLease
+    from ..peers.memory import MemoryPeer
     
-    return Peer(
-        blob_factory=lambda oid: MemBlob(oid),
-        lease_factory=lambda oid, acc, ttl: MemoryLease(oid, acc, ttl)
-    )
+    return MemoryPeer()
 
 def connect(target: Union[str, Peer, None] = None) -> Client:
     """

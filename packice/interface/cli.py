@@ -2,10 +2,10 @@ import argparse
 import time
 import sys
 import os
-from .peers.memory import MemoryPeer
-from .peers.fs import FileSystemPeer
-from .transport.http import HttpServer
-from .transport.uds import UdsServer
+from ..peers.memory import MemoryPeer
+from ..peers.fs import FileSystemPeer
+from ..transport.http import HttpServer
+from ..transport.uds import UdsServer
 
 def main():
     parser = argparse.ArgumentParser(description="Packice Peer")

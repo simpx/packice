@@ -11,8 +11,7 @@ The system is divided into five distinct layers:
 2.  **Backends Layer**: Concrete implementations for storage (Blob) and metadata (Lease).
 3.  **Peers Layer**: Concrete `Peer` implementations and compositions (e.g., `MemoryPeer`, `TieredPeer`).
 4.  **Transport Layer**: The "Mover". Adapts a `Peer` to network protocols.
-5.  **Interface Layer**: The "Consumer". Provides user-facing SDK and CLI.
-6.  **Integration Layer**: Bridges the gap between user applications and Packice.
+5.  **Interface Layer**: The "Consumer". Groups user-facing components (CLI, Client, Integrations).
 
 ---
 
@@ -104,14 +103,16 @@ Located in `packice/transport/`.
 
 ## 5. Interface Layer
 
-Located in the root `packice/` package.
+Located in `packice/interface/`.
 
-### CLI (`cli.py`)
+This layer groups all user-facing components, including the CLI, Client SDK, and Integrations.
+
+### CLI (`interface/cli.py`)
 - **Role**: The command-line interface for starting the server.
 - **Responsibility**: Instantiates the appropriate `Peer` (e.g., `MemoryPeer` or `FileSystemPeer`) and wraps it with a Transport (HTTP or UDS).
-- **Usage**: `python -m packice.cli --impl fs --transport http`
+- **Usage**: `python -m packice.interface.cli --impl fs --transport http`
 
-### Client (`client.py`)
+### Client (`interface/client.py`)
 - **Unified Entry Point**: `packice.connect(target)`.
 - **Auto-Detection**:
     - `connect()`: Creates a private, isolated in-memory Peer.
@@ -120,7 +121,13 @@ Located in the root `packice/` package.
     - `connect("/tmp/...")`: Connects to a local UDS Peer.
 - **Direct Access**: Can wrap a `Peer` instance directly (`DirectTransport`) for zero-overhead in-process usage.
 
+### Integrations (`interface/integrations/`)
+- **Role**: Bridges the gap between user applications and Packice.
+- **Examples**: PyTorch Dataset loaders, vLLM model loaders.
+
 ---
+
+## Usage Patterns
 
 ## Usage Patterns
 

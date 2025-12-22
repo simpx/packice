@@ -21,9 +21,10 @@ The system is divided into six distinct layers:
 Located in `packice/core/`.
 
 ### Blob (`core/blob.py`)
-Abstracts a contiguous chunk of data. Represents real, accessible memory or storage. **Does not** handle reference counting.
+Abstracts a contiguous chunk of data. Represents a self-contained data source.
+- **Self-Contained**: A Blob encapsulates all necessary information to access its data, whether it's a local memory address, a file path, or a remote network location (IP + necessary information).
 - **Interface**: `read()`, `write()`, `seal()`, `memoryview()`.
-- **Polymorphism**: Different implementations support different access patterns (e.g., zero-copy via `memoryview` or `mmap`).
+- **Polymorphism**: Different implementations support different access patterns (e.g., `MemBlob` for local RAM, `RemoteBlob` for network fetch).
 
 ### Object (`core/object.py`)
 The unit of management.

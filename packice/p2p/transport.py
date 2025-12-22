@@ -19,6 +19,12 @@ class RemoteBlob(Blob):
         # or raise an error suggesting to use P2PTransport.
         raise NotImplementedError("Use P2PTransport to transfer data from RemoteBlob")
 
+    def truncate(self, size: int) -> None:
+        raise NotImplementedError("RemoteBlob is read-only")
+
+    def memoryview(self, mode: str = "rb") -> memoryview:
+        raise NotImplementedError("RemoteBlob does not support direct memory access")
+
     def seal(self) -> None:
         pass
 

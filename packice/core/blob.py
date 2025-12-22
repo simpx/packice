@@ -17,6 +17,16 @@ class Blob(ABC):
         pass
 
     @abstractmethod
+    def truncate(self, size: int) -> None:
+        """Resize the blob."""
+        pass
+
+    @abstractmethod
+    def memoryview(self, mode: str = "rb") -> memoryview:
+        """Return a memoryview of the blob."""
+        pass
+
+    @abstractmethod
     def seal(self) -> None:
         """Make the blob immutable."""
         pass

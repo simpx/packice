@@ -1,6 +1,6 @@
 from typing import Any, Dict, Optional, List, Tuple
 import os
-from .base import Interface
+from .base import Transport
 from ..core.lease import AccessType
 
 # Forward declaration for type hinting
@@ -9,7 +9,7 @@ try:
 except ImportError:
     Peer = Any
 
-class DirectInterface(Interface):
+class DirectTransport(Transport):
     def __init__(self, peer: Peer):
         self.peer = peer
 

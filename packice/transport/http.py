@@ -5,7 +5,7 @@ import requests
 from typing import Optional, Any, Dict, Tuple, List
 from ..core.peer import Peer
 from ..core.lease import AccessType
-from .base import Interface
+from .base import Transport
 
 # --- Server ---
 
@@ -59,6 +59,7 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             lease_id = data['lease_id']
             
             self.peer.seal(lease_id)
+
             self.send_json(200, {"status": "sealed"})
         except Exception as e:
             self.send_json(400, {"error": str(e)})
@@ -104,7 +105,7 @@ class HttpServer:
 
 # --- Client ---
 
-class HttpInterface(Interface):
+class HttpTransport(Transport):
     def __init__(self, base_url: str):
         self.base_url = base_url.rstrip('/')
 

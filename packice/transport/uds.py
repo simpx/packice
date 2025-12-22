@@ -7,7 +7,7 @@ import array
 from typing import Optional, List, Any, Dict, Tuple
 from ..core.peer import Peer
 from ..core.lease import AccessType
-from .base import Interface
+from .base import Transport
 
 # --- Server ---
 
@@ -135,7 +135,7 @@ class UdsServer:
 
 # --- Client ---
 
-class UdsInterface(Interface):
+class UdsTransport(Transport):
     def __init__(self, socket_path: str):
         self.socket_path = socket_path
 

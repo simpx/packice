@@ -1,89 +1,115 @@
-# PackIce Design & Implementation
+# Packice Design
 
-## Objective
-Refine the PackIce architecture to achieve better abstraction and decoupling. The goal is to separate the core logic (Peer, Lease, Object) from the implementation details (Backends, Transport), enabling flexible composition of nodes (e.g., HTTP+FS, UDS+Memfd) and easier future extensions (e.g., Redis-based Lease, S3-based Blob).
+## Definition
+Packice is a flexible, batteries-included peer-to-peer cache system. Its flexible architecture separates the core logic (Peer, Lease, Object) from the implementation details (Backends, Transport), making it convenient to define new modules and functionalities. Being batteries-included, it provides ready-to-use implementations like in-memory Packice and Redis versions out of the box.
 
 ## Architecture Overview
 
-The system is divided into four distinct layers:
+The system is divided into five distinct layers:
 
-1.  **Core Layer**: The logical heart. Manages resources, state, and lifecycle.
+1.  **Core Layer**: The logical heart. Defines the abstract `Peer` interface and resource types.
 2.  **Backends Layer**: Concrete implementations for storage (Blob) and metadata (Lease).
-3.  **Transport Layer**: The "Mover". Adapts the Core to network protocols.
-4.  **Interface Layer**: The "Consumer". Provides user-facing SDK and CLI.
+3.  **Peers Layer**: Concrete `Peer` implementations and compositions (e.g., `MemoryPeer`, `TieredPeer`).
+4.  **Transport Layer**: The "Mover". Adapts a `Peer` to network protocols.
+5.  **Interface Layer**: The "Consumer". Provides user-facing SDK and CLI.
+6.  **Integration Layer**: Bridges the gap between user applications and Packice.
 
 ---
 
-## 1. Core Layer (The Logic)
+## 1. Core Layer
 
 Located in `packice/core/`.
 
-### Peer (`core/peer.py`)
-The central coordinator.
-- **Role**: Manages the lifecycle of Objects and Leases.
-- **API**: `acquire()`, `seal()`, `release()`.
-- **Return Values**: Returns `(Lease, Object)` tuples. The `Object` contains raw `Blob`s, which expose low-level **Handles** (e.g., file paths or FDs).
-- **Dependency Injection**: Accepts `BlobFactory` and `LeaseFactory` at initialization.
+### Blob (`core/blob.py`)
+Abstracts a contiguous chunk of data. Represents real, accessible memory or storage. **Does not** handle reference counting.
+- **Interface**: `read()`, `write()`, `seal()`, `memoryview()`.
+- **Polymorphism**: Different implementations support different access patterns (e.g., zero-copy via `memoryview` or `mmap`).
 
 ### Object (`core/object.py`)
 The unit of management.
 - Contains a list of `Blob`s and metadata.
 - Manages state: `CREATING` -> `SEALED`.
-- **Decoupling**: Holds Blobs but knows nothing about Leases.
+- **Lifecycle**: Manages the lifecycle of its underlying `Blob`s.
 
 ### Lease (`core/lease.py`)
 Represents the right to access an Object.
-- **Decoupling**: Holds `object_id` (string) instead of a direct reference to `Object`.
-- **Attributes**: `lease_id`, `object_id`, `access` (READ/CREATE), `ttl`.
+- **Attributes**: `lease_id`, `object_id`, `access_flags` (READ/CREATE), `ttl`.
+- **TTL**: Some leases have a TTL (Time To Live), while others do not and require explicit release.
 
-### Blob (`core/blob.py`)
-Abstracts a contiguous chunk of data.
-- **Interface**: `read()`, `write()`, `seal()`, `get_handle()`.
-- **Handle**: An opaque identifier (str path or int FD) used by the Transport layer.
+### Peer (`core/peer.py`)
+The central coordinator.
+- **Role**: Manages the lifecycle of Objects and Leases.
+- **API**: `acquire()`, `seal()`, `release()`.
+- **Return Values**: Returns `(Lease, Object)` tuples. The `Object` contains `Blob`s, and different Blob types provide different access methods.
 
 ---
 
-## 2. Backends Layer (The Implementations)
+## 2. Backends Layer
 
 Located in `packice/backends/`.
 
 ### File System (`backends/fs.py`)
-- **FileBlob**: Stores data in a local file system. Handle is the file path.
+- **FileBlob**: Stores blob in a local file system.
 
 ### Memory (`backends/memory.py`)
-- **MemBlob**: Stores data in memory (using `memfd_create` on Linux or `tempfile` on others). Handle is the file descriptor (FD).
-- **MemoryLease**: Stores lease state in Python memory. Generates UUIDs internally.
+- **MemBlob**: Stores data in memory (using `memfd_create` on Linux or `tempfile` on others).
+- **MemoryLease**: Stores lease state in Python memory.
+
+### Redis (`backends/redis.py`)
+- **RedisLease**: Stores lease state in Redis.
 
 ---
 
-## 3. Transport Layer (The Mover)
+## 3. Peers Layer
+
+Located in `packice/peers/`.
+
+**Role**: Provides concrete implementations of the `Peer` interface. This is where "business logic" and "composition" happen.
+
+### Standard Peers
+- **MemoryPeer**: A Peer that stores everything in memory (MemBlob + MemoryLease).
+- **FileSystemPeer**: A Peer that stores data on disk (FileBlob + MemoryLease).
+
+### Composite Peers
+- **TieredPeer**: A Peer that manages a "Hot" Peer and a "Cold" Peer, implementing LRU eviction and data movement between them.
+
+---
+
+## 4. Transport Layer
 
 Located in `packice/transport/`.
 
-**Role**: Adapts the Core Peer to specific network protocols.
+**Role**: Adapts the Core Peer to specific network protocols. Exposes Peer capabilities through different interfaces.
 **Key Design Principle**: Transports are **Adapters**, not Consumers. They use the `Peer` API directly to get handles and pass them to the client. They do **not** use the SDK Client.
 
 ### HTTP Transport (`transport/http.py`)
 - **Protocol**: JSON over HTTP.
-- **Mechanism**: Returns file paths (handles) in JSON.
+- **Mechanism**: Returns response in JSON.
 - **Use Case**: Networked nodes, shared storage (NFS/Volume).
-- **Components**: `HttpServer`, `HttpTransportClient`.
+- **Components**: `HttpServer`, `HttpTransport`.
 
 ### UDS Transport (`transport/uds.py`)
 - **Protocol**: JSON over Unix Domain Sockets.
 - **Mechanism**: Uses `SCM_RIGHTS` to pass File Descriptors (FDs) between processes.
 - **Use Case**: Local high-performance IPC, container sidecars.
-- **Components**: `UdsServer`, `UdsTransportClient`.
+- **Components**: `UdsServer`, `UdsTransport`.
+
+### Direct Transport (`transport/direct.py`)
+- **Protocol**: Direct Python function calls.
+- **Mechanism**: Wraps a `Peer` instance directly.
+- **Use Case**: In-process usage, testing.
+- **Components**: `DirectTransport`.
 
 ---
 
-## 4. Interface Layer (The Consumer)
+## 5. Interface Layer
 
 Located in the root `packice/` package.
 
-### Node (`node.py`)
-- **Role**: Encapsulates the logic of assembling a Peer with specific Backend and Transport components.
-- **Responsibility**: Handles configuration, initialization, and lifecycle management (start/stop) of the server.
+### CLI (`cli.py`)
+- **Role**: The command-line interface for starting the server.
+- **Responsibility**: Instantiates the appropriate `Peer` (e.g., `MemoryPeer` or `FileSystemPeer`) and wraps it with a Transport (HTTP or UDS).
+- **Usage**: `python -m packice.cli --impl fs --transport http`
 
 ### Client (`client.py`)
 - **Unified Entry Point**: `packice.connect(target)`.
@@ -92,11 +118,7 @@ Located in the root `packice/` package.
     - `connect("memory://name")`: Connects to a shared in-process Peer (DuckDB style).
     - `connect("http://...")`: Connects to a remote HTTP Peer.
     - `connect("/tmp/...")`: Connects to a local UDS Peer.
-- **Direct Access**: Can wrap a `Peer` instance directly (`DirectTransportClient`) for zero-overhead in-process usage.
-
-### CLI (`cli.py`)
-- **Role**: The command-line interface for starting the server.
-- **Usage**: `python -m packice.cli --impl fs --transport http`
+- **Direct Access**: Can wrap a `Peer` instance directly (`DirectTransport`) for zero-overhead in-process usage.
 
 ---
 

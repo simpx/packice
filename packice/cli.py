@@ -1,10 +1,14 @@
 import argparse
 import time
 import sys
-from .node import Node
+import os
+from .peers.memory import MemoryPeer
+from .peers.fs import FileSystemPeer
+from .transport.http import HttpServer
+from .transport.uds import UdsServer
 
 def main():
-    parser = argparse.ArgumentParser(description="PackIce Node")
+    parser = argparse.ArgumentParser(description="Packice Peer")
     parser.add_argument("--impl", choices=["fs", "mem"], default="fs", help="Blob implementation")
     parser.add_argument("--transport", choices=["http", "uds"], default="http", help="Transport protocol")
     parser.add_argument("--port", type=int, default=8080, help="HTTP port")
@@ -13,25 +17,33 @@ def main():
     
     args = parser.parse_args()
 
-    # Initialize Node
-    node = Node(
-        impl=args.impl,
-        transport=args.transport,
-        port=args.port,
-        socket_path=args.socket,
-        data_dir=args.data_dir
-    )
+    # 1. Build Peer
+    if args.impl == "fs":
+        print(f"Using FileSystemPeer in {args.data_dir}")
+        peer = FileSystemPeer(args.data_dir)
+    elif args.impl == "mem":
+        print("Using MemoryPeer")
+        peer = MemoryPeer()
+    else:
+        raise ValueError(f"Unknown impl: {args.impl}")
     
-    # Start Node
-    node.start()
-    
+    # 2. Start Server
+    if args.transport == "http":
+        server = HttpServer(peer, port=args.port)
+        server.start()
+    elif args.transport == "uds":
+        server = UdsServer(peer, socket_path=args.socket)
+        server.start()
+    else:
+        raise ValueError(f"Unknown transport: {args.transport}")
+        
     print("Node started. Press Ctrl+C to stop.")
     try:
         while True:
             time.sleep(1)
     except KeyboardInterrupt:
         print("Stopping...")
-        node.stop()
+        server.stop()
 
 if __name__ == "__main__":
     main()

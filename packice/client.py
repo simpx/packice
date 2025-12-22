@@ -1,9 +1,9 @@
 from typing import Any, Dict, Optional, IO, List, Union, Tuple
 import os
-from .interface.base import Interface
-from .interface.http import HttpInterface
-from .interface.uds import UdsInterface
-from .interface.direct import DirectInterface
+from .transport.base import Transport
+from .transport.http import HttpTransport
+from .transport.uds import UdsTransport
+from .transport.direct import DirectTransport
 
 # Forward declaration for type hinting
 try:
@@ -12,8 +12,8 @@ except ImportError:
     Peer = Any
 
 class Lease:
-    def __init__(self, interface: Interface, info: Dict, handles: List[Any]):
-        self.interface = interface
+    def __init__(self, transport: Transport, info: Dict, handles: List[Any]):
+        self.transport = transport
         self.info = info
         self.handles = handles
         self.lease_id = info['lease_id']
@@ -52,10 +52,10 @@ class Lease:
             raise ValueError(f"Unknown handle type: {type(handle)}")
 
     def seal(self):
-        self.interface.seal(self.lease_id)
+        self.transport.seal(self.lease_id)
 
     def release(self):
-        self.interface.release(self.lease_id)
+        self.transport.release(self.lease_id)
         # If handles are FDs, close them
         for handle in self.handles:
             if isinstance(handle, int):
@@ -68,23 +68,23 @@ class Client:
     def __init__(self, target: Union[str, Peer]):
         """
         Initialize Client with an address or a Peer instance.
-        If target is a Peer instance, uses DirectInterface.
+        If target is a Peer instance, uses DirectTransport.
         If target is a string:
-            If starts with http:// or https://, uses HTTP interface.
+            If starts with http:// or https://, uses HTTP transport.
             Otherwise, assumes it's a UDS socket path.
         """
         if isinstance(target, str):
             if target.startswith("http://") or target.startswith("https://"):
-                self.interface = HttpInterface(target)
+                self.transport = HttpTransport(target)
             else:
-                self.interface = UdsInterface(target)
+                self.transport = UdsTransport(target)
         else:
             # Assume it's a Peer instance
-            self.interface = DirectInterface(target)
+            self.transport = DirectTransport(target)
 
     def acquire(self, object_id: Optional[str] = None, intent: str = "read", ttl: int = 60, meta: dict = None) -> Lease:
-        info, handles = self.interface.acquire(object_id, intent, ttl, meta)
-        return Lease(self.interface, info, handles)
+        info, handles = self.transport.acquire(object_id, intent, ttl, meta)
+        return Lease(self.transport, info, handles)
 
 # Global registry for named in-process peers
 _LOCAL_PEERS: Dict[str, Any] = {}

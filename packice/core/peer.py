@@ -9,11 +9,27 @@ BlobFactory = Callable[[str], Blob]  # object_id -> Blob
 LeaseFactory = Callable[[str, AccessType, Optional[float]], Lease] # object_id, access, ttl -> Lease
 
 class Peer:
-    def __init__(self, blob_factory: BlobFactory, lease_factory: LeaseFactory):
-        self.blob_factory = blob_factory
-        self.lease_factory = lease_factory
+    def __init__(self, blob_factory: Optional[BlobFactory] = None, lease_factory: Optional[LeaseFactory] = None):
+        self._blob_factory = blob_factory
+        self._lease_factory = lease_factory
         self.objects: Dict[str, Object] = {}
         self.leases: Dict[str, Lease] = {}
+
+    def create_blob(self, object_id: str) -> Blob:
+        """Creates a new Blob for the given object_id.
+        Subclasses can override this to provide custom storage logic.
+        """
+        if self._blob_factory:
+            return self._blob_factory(object_id)
+        raise NotImplementedError("Peer subclasses must implement create_blob or provide a blob_factory")
+
+    def create_lease(self, object_id: str, access: AccessType, ttl: Optional[float]) -> Lease:
+        """Creates a new Lease.
+        Subclasses can override this to provide custom lease logic.
+        """
+        if self._lease_factory:
+            return self._lease_factory(object_id, access, ttl)
+        raise NotImplementedError("Peer subclasses must implement create_lease or provide a lease_factory")
 
     def acquire(self, object_id: Optional[str], access: AccessType, ttl: Optional[float] = None, meta: Optional[Dict[str, Any]] = None) -> Tuple[Lease, Object]:
         # Check for expiration of existing leases first (lazy cleanup)
@@ -34,7 +50,7 @@ class Peer:
             
             # Create new object
             # For CREATE, we create the first blob
-            blob = self.blob_factory(object_id)
+            blob = self.create_blob(object_id)
             obj = Object(object_id, [blob], meta)
             self.objects[object_id] = obj
         
@@ -49,7 +65,7 @@ class Peer:
                 # v0: "For read intent, may fail if the node lacks a sealed copy"
                 raise ValueError(f"Object {object_id} is not sealed yet")
 
-        lease = self.lease_factory(object_id, access, ttl)
+        lease = self.create_lease(object_id, access, ttl)
         self.leases[lease.lease_id] = lease
         
         # Return lease and the object
@@ -66,6 +82,24 @@ class Peer:
 
         obj.seal()
         # In a real system, we might notify waiting readers here
+
+    def remove(self, lease_id: str):
+        """Removes the object associated with the lease.
+        Requires a CREATE lease (or a special DELETE intent if we had one).
+        For now, we reuse CREATE intent to imply 'ownership' or 'write access'.
+        """
+        lease = self._get_active_lease(lease_id)
+        if lease.access != AccessType.CREATE:
+            raise ValueError("Cannot remove object with a read lease")
+        
+        object_id = lease.object_id
+        if object_id in self.objects:
+            # TODO: Handle other active leases on this object?
+            # For now, we just delete it.
+            del self.objects[object_id]
+        
+        # Release the lease itself
+        self.release(lease_id)
 
     def release(self, lease_id: str):
         if lease_id not in self.leases:

@@ -28,3 +28,7 @@ class Object:
 
     def is_sealed(self) -> bool:
         return self.state == ObjectState.SEALED
+
+    def delete(self):
+        for blob in self.blobs:
+            blob.delete()

@@ -37,3 +37,11 @@ class FileBlob(Blob):
     def close(self) -> None:
         if self.file:
             self.file.close()
+
+    def delete(self) -> None:
+        self.close()
+        if os.path.exists(self.path):
+            try:
+                os.remove(self.path)
+            except OSError:
+                pass

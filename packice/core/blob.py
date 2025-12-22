@@ -33,3 +33,8 @@ class Blob(ABC):
     def close(self) -> None:
         """Clean up resources."""
         pass
+
+    @abstractmethod
+    def delete(self) -> None:
+        """Delete the blob data."""
+        pass

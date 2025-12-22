@@ -19,6 +19,8 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             self.handle_acquire()
         elif self.path == '/seal':
             self.handle_seal()
+        elif self.path == '/discard':
+            self.handle_discard()
         elif self.path == '/release':
             self.handle_release()
         else:
@@ -34,11 +36,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             ttl = data.get('ttl_seconds', 60)
             meta = data.get('meta')
 
-            access = AccessType.CREATE if intent == 'create' else AccessType.READ
+            if intent == 'create':
+                access = AccessType.CREATE
+            elif intent == 'write':
+                access = AccessType.WRITE
+            else:
+                access = AccessType.READ
             
             lease, obj = self.peer.acquire(object_id, access, ttl, meta)
             
-            handles = [b.get_handle() for b in obj.blobs]
+            handles = []
+            if obj:
+                handles = [b.get_handle() for b in obj.blobs]
             
             response = {
                 "lease_id": lease.lease_id,
@@ -61,6 +70,18 @@ class RequestHandler(http.server.BaseHTTPRequestHandler):
             self.peer.seal(lease_id)
 
             self.send_json(200, {"status": "sealed"})
+        except Exception as e:
+            self.send_json(400, {"error": str(e)})
+
+    def handle_discard(self):
+        try:
+            length = int(self.headers.get('content-length', 0))
+            data = json.loads(self.rfile.read(length))
+            lease_id = data['lease_id']
+            
+            self.peer.discard(lease_id)
+
+            self.send_json(200, {"status": "discarded"})
         except Exception as e:
             self.send_json(400, {"error": str(e)})
 
@@ -130,6 +151,12 @@ class HttpTransport(Transport):
         resp = requests.post(url, json={"lease_id": lease_id})
         if resp.status_code != 200:
             raise RuntimeError(f"Seal failed: {resp.text}")
+
+    def discard(self, lease_id: str) -> None:
+        url = f"{self.base_url}/discard"
+        resp = requests.post(url, json={"lease_id": lease_id})
+        if resp.status_code != 200:
+            raise RuntimeError(f"Discard failed: {resp.text}")
 
     def release(self, lease_id: str) -> None:
         url = f"{self.base_url}/release"

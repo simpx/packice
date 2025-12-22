@@ -5,13 +5,14 @@ Packice is a flexible, batteries-included peer-to-peer cache system. Its flexibl
 
 ## Architecture Overview
 
-The system is divided into five distinct layers:
+The system is divided into six distinct layers:
 
-1.  **Core Layer**: The logical heart. Defines the abstract `Peer` interface and resource types.
+1.  **Core Layer**: The logical heart. Defines the abstract `Peer` interface and resource types (Object, Lease, Blob).
 2.  **Backends Layer**: Concrete implementations for storage (Blob) and metadata (Lease).
 3.  **Peers Layer**: Concrete `Peer` implementations and compositions (e.g., `MemoryPeer`, `TieredPeer`).
-4.  **Transport Layer**: The "Mover". Adapts a `Peer` to network protocols.
-5.  **Interface Layer**: The "Consumer". Groups user-facing components (CLI, Client, Integrations).
+4.  **P2P Layer**: Distributed capabilities (Tracker, Gossip, P2P Transport).
+5.  **Transport Layer**: Adapts a `Peer` to network protocols.
+6.  **Interface Layer**: Groups user-facing components (CLI, Client, Integrations).
 
 ---
 
@@ -32,13 +33,13 @@ The unit of management.
 
 ### Lease (`core/lease.py`)
 Represents the right to access an Object.
-- **Attributes**: `lease_id`, `object_id`, `access_flags` (READ/CREATE), `ttl`.
+- **Attributes**: `lease_id`, `object_id`, `access_flags` (READ/CREATE/WRITE), `ttl`.
 - **TTL**: Some leases have a TTL (Time To Live), while others do not and require explicit release.
 
 ### Peer (`core/peer.py`)
 The central coordinator.
 - **Role**: Manages the lifecycle of Objects and Leases.
-- **API**: `acquire()`, `seal()`, `release()`.
+- **API**: `acquire()`, `seal()`, `discard()`, `release()`.
 - **Return Values**: Returns `(Lease, Object)` tuples. The `Object` contains `Blob`s, and different Blob types provide different access methods.
 
 ---
@@ -74,7 +75,19 @@ Located in `packice/peers/`.
 
 ---
 
-## 4. Transport Layer
+## 4. P2P Layer (Planned)
+
+Located in `packice/p2p/`.
+
+**Role**: Manages distributed capabilities, transforming single nodes into a loose P2P network.
+
+- **Tracker**: Lightweight metadata service for object discovery.
+- **Gossip**: Node discovery and state propagation.
+- **P2P Transport**: Specialized transport for efficient peer-to-peer data transfer.
+
+---
+
+## 5. Transport Layer
 
 Located in `packice/transport/`.
 
@@ -101,7 +114,7 @@ Located in `packice/transport/`.
 
 ---
 
-## 5. Interface Layer
+## 6. Interface Layer
 
 Located in `packice/interface/`.
 
@@ -124,44 +137,3 @@ This layer groups all user-facing components, including the CLI, Client SDK, and
 ### Integrations (`interface/integrations/`)
 - **Role**: Bridges the gap between user applications and Packice.
 - **Examples**: PyTorch Dataset loaders, vLLM model loaders.
-
----
-
-## Usage Patterns
-
-## Usage Patterns
-
-### 1. In-Process (DuckDB Style)
-Ideal for single-process applications or testing. No network overhead.
-
-```python
-import packice
-
-# Private instance
-client = packice.connect()
-
-# Shared instance (between modules)
-client_a = packice.connect("memory://shared")
-client_b = packice.connect("memory://shared")
-```
-
-### 2. Multi-Process (Networked)
-Ideal for multi-process applications or distributed systems. Requires a Server process.
-
-**Server (Process A):**
-```bash
-# Start a UDS node with Memory storage
-python3 -m packice.cli --impl mem --transport uds --socket /tmp/packice.sock
-```
-
-**Client (Process B):**
-```python
-import packice
-
-# Connects to UDS socket, handles JSON and FD reception transparently
-client = packice.connect("/tmp/packice.sock")
-
-lease = client.acquire(intent="create")
-with lease.open("wb") as f:
-    f.write(b"data")
-```

@@ -50,6 +50,11 @@ class MemBlob(Blob):
         if self.file:
             self.file.close()
 
+    def delete(self) -> None:
+        self.close()
+        # For memfd, closing the FD releases memory if no other references.
+        # For tempfile, it's deleted on close.
+
 class MemoryLease(Lease):
     def __init__(self, object_id: str, access: AccessType, ttl: Optional[float] = None):
         self._lease_id = str(uuid.uuid4())

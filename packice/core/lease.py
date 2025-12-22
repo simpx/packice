@@ -6,6 +6,7 @@ from .object import Object
 class AccessType(Enum):
     READ = "READ"
     CREATE = "CREATE"
+    WRITE = "WRITE"
 
 class Lease(ABC):
     """

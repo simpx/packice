@@ -82,7 +82,13 @@ class UdsServer:
             ttl = data.get('ttl_seconds') # Optional for UDS, maybe connection bound?
             meta = data.get('meta')
             
-            access = AccessType.CREATE if intent == 'create' else AccessType.READ
+            if intent == 'create':
+                access = AccessType.CREATE
+            elif intent == 'write':
+                access = AccessType.WRITE
+            else:
+                access = AccessType.READ
+            
             lease, obj = self.peer.acquire(object_id, access, ttl, meta)
             
             resp = {
@@ -92,7 +98,10 @@ class UdsServer:
             }
             
             # Check if we need to pass FDs
-            handles = [b.get_handle() for b in obj.blobs]
+            handles = []
+            if obj:
+                handles = [b.get_handle() for b in obj.blobs]
+            
             fds = []
             paths = []
             
@@ -112,6 +121,11 @@ class UdsServer:
             lease_id = data['lease_id']
             self.peer.seal(lease_id)
             self._send_response(sock, {"status": "sealed"})
+
+        elif cmd == 'discard':
+            lease_id = data['lease_id']
+            self.peer.discard(lease_id)
+            self._send_response(sock, {"status": "discarded"})
 
         elif cmd == 'release':
             lease_id = data['lease_id']
@@ -185,6 +199,17 @@ class UdsTransport(Transport):
         sock = self._connect()
         try:
             req = {"command": "seal", "lease_id": lease_id}
+            sock.sendall(json.dumps(req).encode('utf-8'))
+            resp = json.loads(sock.recv(4096).decode('utf-8'))
+            if resp.get("status") == "error":
+                raise RuntimeError(resp.get("message"))
+        finally:
+            sock.close()
+
+    def discard(self, lease_id: str) -> None:
+        sock = self._connect()
+        try:
+            req = {"command": "discard", "lease_id": lease_id}
             sock.sendall(json.dumps(req).encode('utf-8'))
             resp = json.loads(sock.recv(4096).decode('utf-8'))
             if resp.get("status") == "error":

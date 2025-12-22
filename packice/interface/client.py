@@ -54,6 +54,16 @@ class Lease:
     def seal(self):
         self.transport.seal(self.lease_id)
 
+    def discard(self):
+        self.transport.discard(self.lease_id)
+        # If handles are FDs, close them
+        for handle in self.handles:
+            if isinstance(handle, int):
+                try:
+                    os.close(handle)
+                except OSError:
+                    pass
+
     def release(self):
         self.transport.release(self.lease_id)
         # If handles are FDs, close them
@@ -85,6 +95,14 @@ class Client:
     def acquire(self, object_id: Optional[str] = None, intent: str = "read", ttl: int = 60, meta: dict = None) -> Lease:
         info, handles = self.transport.acquire(object_id, intent, ttl, meta)
         return Lease(self.transport, info, handles)
+
+    def delete(self, object_id: str):
+        """
+        Helper to delete an object.
+        Acquires a WRITE lease and then discards it.
+        """
+        lease = self.acquire(object_id, intent="write")
+        lease.discard()
 
 # Global registry for named in-process peers
 _LOCAL_PEERS: Dict[str, Any] = {}

@@ -30,7 +30,7 @@ class TieredPeer(Peer):
                 raise KeyError(f"Object {object_id} not found in tiered storage")
 
         # 2. CREATE: Always create in Hot
-        if access == AccessType.CREATE:
+        elif access == AccessType.CREATE:
             self._ensure_capacity()
             
             # We don't know the object_id yet if it's None, so we let hot peer generate it
@@ -39,6 +39,20 @@ class TieredPeer(Peer):
             lease, obj = self.hot.acquire(object_id, access, ttl, meta)
             self._update_lru(obj.object_id)
             return lease, obj
+
+        # 3. WRITE: Check Hot, then Cold
+        elif access == AccessType.WRITE:
+            if object_id in self.hot.objects:
+                # If we are writing (modifying/deleting) in hot, we should probably update LRU or remove it?
+                # If the intent is to delete, we remove from LRU in discard().
+                # If the intent is to modify, we update LRU.
+                # Since we don't know yet, let's update LRU for now.
+                self._update_lru(object_id)
+                return self.hot.acquire(object_id, access, ttl, meta)
+            elif object_id in self.cold.objects:
+                return self.cold.acquire(object_id, access, ttl, meta)
+            else:
+                raise KeyError(f"Object {object_id} not found in tiered storage")
             
         raise ValueError(f"Unknown access type: {access}")
 
@@ -53,23 +67,22 @@ class TieredPeer(Peer):
         else:
             raise KeyError(f"Lease {lease_id} not found")
 
+    def discard(self, lease_id: str):
+        if lease_id in self.hot.leases:
+            lease = self.hot.leases[lease_id]
+            if lease.object_id in self.lru_list:
+                self.lru_list.remove(lease.object_id)
+            self.hot.discard(lease_id)
+        elif lease_id in self.cold.leases:
+            self.cold.discard(lease_id)
+        else:
+            raise KeyError(f"Lease {lease_id} not found")
+
     def release(self, lease_id: str):
         if lease_id in self.hot.leases:
             self.hot.release(lease_id)
         elif lease_id in self.cold.leases:
             self.cold.release(lease_id)
-
-    def remove(self, lease_id: str):
-        if lease_id in self.hot.leases:
-            # Remove from LRU if it's there
-            lease = self.hot.leases[lease_id]
-            if lease.object_id in self.lru_list:
-                self.lru_list.remove(lease.object_id)
-            self.hot.remove(lease_id)
-        elif lease_id in self.cold.leases:
-            self.cold.remove(lease_id)
-        else:
-             raise KeyError(f"Lease {lease_id} not found")
 
     def _update_lru(self, object_id: str):
         if object_id in self.lru_list:
@@ -106,8 +119,5 @@ class TieredPeer(Peer):
         self.cold.release(create_lease.lease_id)
 
         # 3. Remove from Hot
-        # We need a CREATE lease to remove (as per our new API design)
-        # Or we can use a special system-level remove if we had one.
-        # Using the new remove(lease_id) API:
-        remove_lease, _ = self.hot.acquire(object_id, AccessType.CREATE)
-        self.hot.remove(remove_lease.lease_id)
+        lease, _ = self.hot.acquire(object_id, AccessType.WRITE)
+        self.hot.discard(lease.lease_id)

@@ -16,5 +16,9 @@ class Transport(ABC):
         pass
 
     @abstractmethod
+    def discard(self, lease_id: str) -> None:
+        pass
+
+    @abstractmethod
     def release(self, lease_id: str) -> None:
         pass

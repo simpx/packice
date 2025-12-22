@@ -36,8 +36,8 @@ class Peer:
         self._cleanup_expired_leases()
 
         if object_id is None:
-            if access == AccessType.READ:
-                raise ValueError("Cannot acquire read lease without object_id")
+            if access in (AccessType.READ, AccessType.WRITE):
+                raise ValueError(f"Cannot acquire {access.value} lease without object_id")
             object_id = str(uuid.uuid4())
 
         obj = self.objects.get(object_id)
@@ -65,6 +65,12 @@ class Peer:
                 # v0: "For read intent, may fail if the node lacks a sealed copy"
                 raise ValueError(f"Object {object_id} is not sealed yet")
 
+        elif access == AccessType.WRITE:
+            if obj is None:
+                raise KeyError(f"Object {object_id} not found")
+            # In a real system, we might check for other active leases here to ensure exclusivity.
+            # For now, we assume the caller handles coordination or we rely on simple locking.
+
         lease = self.create_lease(object_id, access, ttl)
         self.leases[lease.lease_id] = lease
         
@@ -83,22 +89,24 @@ class Peer:
         obj.seal()
         # In a real system, we might notify waiting readers here
 
-    def remove(self, lease_id: str):
-        """Removes the object associated with the lease.
-        Requires a CREATE lease (or a special DELETE intent if we had one).
-        For now, we reuse CREATE intent to imply 'ownership' or 'write access'.
+    def discard(self, lease_id: str):
+        """
+        Permanently deletes the object associated with the lease.
+        Requires a CREATE or WRITE lease.
         """
         lease = self._get_active_lease(lease_id)
-        if lease.access != AccessType.CREATE:
-            raise ValueError("Cannot remove object with a read lease")
+        if lease.access not in (AccessType.CREATE, AccessType.WRITE):
+            raise ValueError("Cannot discard with a read lease")
         
         object_id = lease.object_id
-        if object_id in self.objects:
-            # TODO: Handle other active leases on this object?
-            # For now, we just delete it.
+        obj = self.objects.get(object_id)
+        
+        if obj:
+            # Physical deletion
+            obj.delete()
             del self.objects[object_id]
         
-        # Release the lease itself
+        # Release the lease
         self.release(lease_id)
 
     def release(self, lease_id: str):

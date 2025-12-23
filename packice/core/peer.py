@@ -74,7 +74,6 @@ class Peer:
         lease = self.create_lease(object_id, access, ttl)
         self.leases[lease.lease_id] = lease
         
-        # Return lease and the object
         return lease, obj
 
     def seal(self, lease_id: str):
@@ -87,7 +86,6 @@ class Peer:
              raise KeyError(f"Object {lease.object_id} not found for lease {lease_id}")
 
         obj.seal()
-        # In a real system, we might notify waiting readers here
 
     def discard(self, lease_id: str):
         """
@@ -102,11 +100,9 @@ class Peer:
         obj = self.objects.get(object_id)
         
         if obj:
-            # Physical deletion
             obj.delete()
             del self.objects[object_id]
         
-        # Release the lease
         self.release(lease_id)
 
     def release(self, lease_id: str):

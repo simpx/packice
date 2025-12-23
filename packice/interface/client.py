@@ -42,6 +42,9 @@ class Object:
         elif isinstance(handle, str):
             # Path -> FileBlobView
             return FileBlobView(handle, mode=mode)
+        elif isinstance(handle, dict) and handle.get('type') == 'shared_fs':
+            from ..backends.shared_fs import SharedFSBlobView
+            return SharedFSBlobView(handle['path'], mode=mode, data_offset=handle.get('data_offset', 0))
         else:
             raise ValueError(f"Unknown handle type: {type(handle)}")
 
@@ -85,18 +88,24 @@ class Object:
             # Should not happen with NativeBlob
             raise NotImplementedError("Cannot open file-like object for this blob type")
 
+    def get_meta(self, key: str) -> Any:
+        """Get a metadata value."""
+        if self.info and 'meta' in self.info and self.info['meta']:
+            return self.info['meta'].get(key)
+        return None
+
     def seal(self):
         self._blob.seal()
         self.transport.seal(self.lease_id)
 
     def discard(self):
-        self._blob.close()
+        self._close()
         self.transport.discard(self.lease_id)
 
     def release(self):
-        self.close()
+        self._close()
 
-    def close(self):
+    def _close(self):
         if self._blob:
             self._blob.close()
             self._blob = None
@@ -106,7 +115,7 @@ class Object:
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.close()
+        self._close()
 
 class Client:
     def __init__(self, target: Union[str, Peer]):

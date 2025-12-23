@@ -37,7 +37,8 @@ class DirectTransport(Transport):
             "lease_id": lease.lease_id,
             "object_id": lease.object_id,
             "intent": intent,
-            "ttl_seconds": ttl
+            "ttl_seconds": ttl,
+            "meta": obj.meta if obj else {}
         }
         return info, handles
 

@@ -1,7 +1,7 @@
 import os
 import mmap
 from typing import Any
-from ..core.blob import Blob
+from ..core.blob import Blob, BlobView
 
 class FileBlob(Blob):
     def __init__(self, path: str):
@@ -65,3 +65,84 @@ class FileBlob(Blob):
                 os.remove(self.path)
             except OSError:
                 pass
+
+class FileBlobView(BlobView):
+    """
+    Client-side view of a FileBlob.
+    Wraps a file path received from the server to access the file.
+    """
+    def __init__(self, path: str, mode: str = "rb"):
+        self.path = path
+        self.mode = mode
+        self.fd = None
+        self._mmap = None
+        self._buffer = None
+        
+        flags = os.O_RDONLY
+        if 'w' in mode or '+' in mode or 'a' in mode:
+            flags = os.O_RDWR
+        
+        self.fd = os.open(path, flags)
+
+    def write(self, data: bytes) -> int:
+        return os.write(self.fd, data)
+
+    def read(self, size: int = -1, offset: int = 0) -> bytes:
+        if offset != -1:
+            os.lseek(self.fd, offset, os.SEEK_SET)
+        return os.read(self.fd, size)
+
+    def truncate(self, size: int) -> None:
+        os.ftruncate(self.fd, size)
+        self._close_mmap()
+
+    def memoryview(self, mode: str = "rb") -> memoryview:
+        if self._buffer:
+            return self._buffer
+
+        try:
+            size = os.fstat(self.fd).st_size
+        except OSError:
+            size = 0
+            
+        if size == 0:
+            return memoryview(b"")
+
+        prot = mmap.PROT_READ
+        if 'w' in self.mode or '+' in self.mode:
+            prot |= mmap.PROT_WRITE
+        
+        flags = mmap.MAP_SHARED
+        
+        try:
+            self._mmap = mmap.mmap(self.fd, 0, flags=flags, prot=prot)
+            self._buffer = memoryview(self._mmap)
+            return self._buffer
+        except Exception as e:
+            raise ValueError(f"Failed to mmap: {e}")
+
+    def seal(self) -> None:
+        self._close_mmap()
+
+    def get_handle(self) -> Any:
+        return self.fd
+
+    def close(self) -> None:
+        self._close_mmap()
+        if self.fd is not None:
+            try:
+                os.close(self.fd)
+            except OSError:
+                pass
+            self.fd = None
+
+    def delete(self) -> None:
+        self.close()
+
+    def _close_mmap(self):
+        if self._buffer:
+            self._buffer.release()
+            self._buffer = None
+        if self._mmap:
+            self._mmap.close()
+            self._mmap = None

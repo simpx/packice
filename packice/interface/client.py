@@ -5,6 +5,8 @@ from ..transport.base import Transport
 from ..transport.http import HttpTransport
 from ..transport.uds import UdsTransport
 from ..transport.direct import DirectTransport
+from ..backends.memory import MemoryBlobView
+from ..backends.fs import FileBlobView
 
 # Forward declaration for type hinting
 try:
@@ -23,9 +25,25 @@ class Object:
         self.handles = handles
         self.lease_id = info['lease_id']
         self.object_id = info['object_id']
-        self._buffer = None
-        self._mmap = None
-        self._file = None
+        self._blob = self._reconstruct_blob()
+
+    def _reconstruct_blob(self):
+        if not self.handles:
+            raise ValueError("No handles available")
+        
+        # Assuming single blob for now
+        handle = self.handles[0]
+        intent = self.info.get('intent', 'read')
+        mode = "r+b" if intent in ('write', 'create') else "rb"
+        
+        if isinstance(handle, int):
+            # FD -> MemoryBlobView
+            return MemoryBlobView(handle, mode=mode)
+        elif isinstance(handle, str):
+            # Path -> FileBlobView
+            return FileBlobView(handle, mode=mode)
+        else:
+            raise ValueError(f"Unknown handle type: {type(handle)}")
 
     @property
     def id(self) -> str:
@@ -33,159 +51,46 @@ class Object:
 
     @property
     def buffer(self) -> memoryview:
-        if self._buffer is not None:
-            return self._buffer
-        
-        if not self.handles:
-            raise ValueError("No handles available")
-        
-        # Assuming single blob for now
-        handle = self.handles[0]
-        
-        if isinstance(handle, int):
-            # FD
-            # We need to keep the FD open for mmap
-            # We can use the FD directly
-            # Check if it's read or write intent
-            intent = self.info.get('intent', 'read')
-            prot = mmap.PROT_READ
-            flags = mmap.MAP_SHARED
-            if intent in ('write', 'create'):
-                prot |= mmap.PROT_WRITE
-            
-            # Get current size
-            size = os.fstat(handle).st_size
-            if size == 0:
-                # Cannot mmap empty file usually, but maybe we want to allow it?
-                # If it's create, user should have truncated it first?
-                # Or we return empty memoryview?
-                pass
-
-            self._mmap = mmap.mmap(handle, 0, flags=flags, prot=prot)
-            self._buffer = memoryview(self._mmap)
-            
-        elif isinstance(handle, str):
-            # Path
-            intent = self.info.get('intent', 'read')
-            mode = "r+b" if intent in ('write', 'create') else "rb"
-            self._file = open(handle, mode)
-            
-            prot = mmap.PROT_READ
-            flags = mmap.MAP_SHARED
-            if intent in ('write', 'create'):
-                prot |= mmap.PROT_WRITE
-                
-            self._mmap = mmap.mmap(self._file.fileno(), 0, flags=flags, prot=prot)
-            self._buffer = memoryview(self._mmap)
-            
-        return self._buffer
+        return self._blob.memoryview()
 
     def truncate(self, size: int):
-        if not self.handles:
-            raise ValueError("No handles available")
-        
-        handle = self.handles[0]
-        if isinstance(handle, int):
-            os.ftruncate(handle, size)
-        elif isinstance(handle, str):
-            with open(handle, "r+b") as f:
-                f.truncate(size)
-        
-        # Invalidate buffer if size changed
-        if self._buffer:
-            self._buffer.release()
-            self._buffer = None
-        if self._mmap:
-            self._mmap.close()
-            self._mmap = None
+        self._blob.truncate(size)
 
     def open(self, mode: str = "rb") -> IO:
         """
         Open the blob for reading or writing.
         Returns a file-like object.
-        For now, assumes single blob or opens the last one (for writing).
         """
-        if not self.handles:
-            raise ValueError("No handles available")
-        
-        # For CREATE, we usually write to the last blob.
-        # For READ, we might want to read the first?
-        # This is a simplification.
-        handle = self.handles[-1]
-
+        # NativeBlob doesn't expose a file object directly in the interface,
+        # but we can implement it or wrap the FD.
+        # For now, let's just return a file object wrapping the FD if possible.
+        handle = self._blob.get_handle()
         if isinstance(handle, int):
-            # It's an FD. Duplicate it so the file object doesn't close the original handle
-            # which is managed by this Lease object.
+            # Duplicate FD to avoid closing the original when file object is closed?
+            # Or just return a new file object.
+            # If we dup, we need to manage it.
             new_fd = os.dup(handle)
-            f = os.fdopen(new_fd, mode)
-            # Attempt to seek to 0 for read mode, as FD might share offset
-            if 'r' in mode:
-                try:
-                    f.seek(0)
-                except OSError:
-                    pass
-            return f
-        elif isinstance(handle, str):
-            # It's a path
-            return open(handle, mode)
+            return os.fdopen(new_fd, mode)
         else:
-            raise ValueError(f"Unknown handle type: {type(handle)}")
+            # Should not happen with NativeBlob
+            raise NotImplementedError("Cannot open file-like object for this blob type")
 
     def seal(self):
-        if self._buffer:
-            self._buffer.release()
-            self._buffer = None
-        if self._mmap:
-            self._mmap.close()
-            self._mmap = None
-        if self._file:
-            self._file.close()
-            self._file = None
-            
+        self._blob.seal()
         self.transport.seal(self.lease_id)
 
     def discard(self):
-        if self._buffer:
-            self._buffer.release()
-            self._buffer = None
-        if self._mmap:
-            self._mmap.close()
-            self._mmap = None
-        if self._file:
-            self._file.close()
-            self._file = None
-
+        self._blob.close()
         self.transport.discard(self.lease_id)
-        # If handles are FDs, close them
-        for handle in self.handles:
-            if isinstance(handle, int):
-                try:
-                    os.close(handle)
-                except OSError:
-                    pass
 
     def release(self):
         self.close()
 
     def close(self):
-        if self._buffer:
-            self._buffer.release()
-            self._buffer = None
-        if self._mmap:
-            self._mmap.close()
-            self._mmap = None
-        if self._file:
-            self._file.close()
-            self._file = None
-
+        if self._blob:
+            self._blob.close()
+            self._blob = None
         self.transport.release(self.lease_id)
-        # If handles are FDs, close them
-        for handle in self.handles:
-            if isinstance(handle, int):
-                try:
-                    os.close(handle)
-                except OSError:
-                    pass
 
     def __enter__(self):
         return self

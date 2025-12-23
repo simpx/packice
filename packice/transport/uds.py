@@ -94,7 +94,8 @@ class UdsServer:
             resp = {
                 "status": "ok",
                 "lease_id": lease.lease_id,
-                "object_id": lease.object_id
+                "object_id": lease.object_id,
+                "intent": intent
             }
             
             # Check if we need to pass FDs
@@ -116,6 +117,13 @@ class UdsServer:
             else:
                 resp["handles"] = paths
                 self._send_response(sock, resp)
+
+        elif cmd == 'truncate':
+            # New command to handle truncate over UDS if needed, 
+            # but actually truncate is done on the FD directly by the client.
+            # However, if the client doesn't have write permission on the FD (e.g. sealed), it fails.
+            # But here we are talking about CREATE intent.
+            pass
 
         elif cmd == 'seal':
             lease_id = data['lease_id']

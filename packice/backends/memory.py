@@ -4,7 +4,7 @@ import mmap
 import time
 import uuid
 from typing import Any, Optional
-from ..core.blob import Blob
+from ..core.blob import Blob, BlobView
 from ..core.lease import Lease, AccessType
 from ..core.object import Object
 
@@ -21,7 +21,10 @@ class MemBlob(Blob):
         else:
             # Fallback for non-Linux (e.g. macOS)
             # Create a temporary file that is deleted on close, but we keep it open
-            self.file = tempfile.TemporaryFile(prefix=f"packice_{name}_")
+            # Use w+b to ensure read/write
+            # Note: TemporaryFile on macOS/Unix usually unlinks immediately, so we can't open it by path.
+            # But we have the FD.
+            self.file = tempfile.TemporaryFile(prefix=f"packice_{name}_", mode="w+b")
             self.fd = self.file.fileno()
 
     def write(self, data: bytes) -> int:
@@ -82,6 +85,80 @@ class MemBlob(Blob):
         self.close()
         # For memfd, closing the FD releases memory if no other references.
         # For tempfile, it's deleted on close.
+
+class MemoryBlobView(BlobView):
+    """
+    Client-side view of a MemoryBlob.
+    Wraps a file descriptor received from the server to access shared memory.
+    """
+    def __init__(self, fd: int, mode: str = "rb"):
+        self.fd = fd
+        self.mode = mode
+        self._mmap = None
+        self._buffer = None
+
+    def write(self, data: bytes) -> int:
+        return os.write(self.fd, data)
+
+    def read(self, size: int = -1, offset: int = 0) -> bytes:
+        if offset != -1:
+            os.lseek(self.fd, offset, os.SEEK_SET)
+        return os.read(self.fd, size)
+
+    def truncate(self, size: int) -> None:
+        os.ftruncate(self.fd, size)
+        self._close_mmap()
+
+    def memoryview(self, mode: str = "rb") -> memoryview:
+        if self._buffer:
+            return self._buffer
+
+        try:
+            size = os.fstat(self.fd).st_size
+        except OSError:
+            size = 0
+            
+        if size == 0:
+            return memoryview(b"")
+
+        prot = mmap.PROT_READ
+        if 'w' in self.mode or '+' in self.mode:
+            prot |= mmap.PROT_WRITE
+        
+        flags = mmap.MAP_SHARED
+        
+        try:
+            self._mmap = mmap.mmap(self.fd, 0, flags=flags, prot=prot)
+            self._buffer = memoryview(self._mmap)
+            return self._buffer
+        except Exception as e:
+            raise ValueError(f"Failed to mmap: {e}")
+
+    def seal(self) -> None:
+        self._close_mmap()
+
+    def get_handle(self) -> Any:
+        return self.fd
+
+    def close(self) -> None:
+        self._close_mmap()
+        if self.fd is not None:
+            try:
+                os.close(self.fd)
+            except OSError:
+                pass
+            self.fd = None
+
+    def delete(self) -> None:
+        self.close()
+
+    def _close_mmap(self):
+        if self._buffer:
+            self._buffer.release()
+            self._buffer = None
+        if self._mmap:
+            self._mmap.close()
+            self._mmap = None
 
 class MemoryLease(Lease):
     def __init__(self, object_id: str, access: AccessType, ttl: Optional[float] = None):

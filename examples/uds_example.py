@@ -7,11 +7,11 @@ import multiprocessing
 
 sys.path.append(os.getcwd())
 
-import packice
-from packice.peers.memory import MemoryPeer
-from packice.transport.uds import UdsServer
+import fruina
+from fruina.peers.memory import MemoryPeer
+from fruina.transport.uds import UdsServer
 
-SOCKET_PATH = "/tmp/packice_example_combined.sock"
+SOCKET_PATH = "/tmp/fruina_example_combined.sock"
 
 def run_server():
     """Function to run the server in a separate process."""
@@ -43,7 +43,7 @@ def run_client():
     print(f"\n[Client] Connecting to {SOCKET_PATH}...")
 
     try:
-        client = packice.connect(SOCKET_PATH)
+        client = fruina.connect(SOCKET_PATH)
     except Exception as e:
         print(f"[Client] Failed to connect: {e}")
         return

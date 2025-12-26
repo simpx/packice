@@ -16,7 +16,7 @@ except ImportError:
 
 class Object:
     """
-    Represents a PackIce object handle.
+    Represents a Fruina object handle.
     Wraps the underlying lease and provides access to the object data.
     """
     def __init__(self, transport: Transport, info: Dict, handles: List[Any]):

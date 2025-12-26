@@ -12,7 +12,7 @@ from .base import Transport
 # --- Server ---
 
 class UdsServer:
-    def __init__(self, peer: Peer, socket_path: str = "/tmp/packice.sock"):
+    def __init__(self, peer: Peer, socket_path: str = "/tmp/fruina.sock"):
         self.peer = peer
         self.socket_path = socket_path
         self.server_socket = None

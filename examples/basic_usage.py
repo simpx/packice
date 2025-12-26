@@ -3,19 +3,19 @@ import os
 
 sys.path.append(os.getcwd())
 
-import packice
+import fruina
 
 def main():
     print("=== Example 1: Local In-Process Peer (Dream API) ===")
 
     # 1. Connect to in-process MemoryPeer
-    peer = packice.MemoryPeer()
-    client = packice.connect(peer)
+    peer = fruina.MemoryPeer()
+    client = fruina.connect(peer)
     print(f"[*] Client connected to {peer}")
 
     # 2. Write API: create -> write -> seal
     print("\n--- Creating Object ---")
-    data = b"Hello, Packice!"
+    data = b"Hello, Fruina!"
     
     writer = client.create(size=len(data), meta={"content_type": "text/plain"})
     print(f"[*] Created object: {writer.id}")

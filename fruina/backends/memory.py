@@ -19,7 +19,7 @@ class MemBlob(Blob):
             self.fd = os.memfd_create(name, os.MFD_CLOEXEC)
             self.file = open(self.fd, "wb+", buffering=0)
         else:
-            self.file = tempfile.TemporaryFile(prefix=f"packice_{name}_", mode="w+b")
+            self.file = tempfile.TemporaryFile(prefix=f"fruina_{name}_", mode="w+b")
             self.fd = self.file.fileno()
 
     def write(self, data: bytes) -> int:

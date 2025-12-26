@@ -9,7 +9,7 @@ from ..core.blob import Blob, BlobView
 # Total Size: 8 + 2 + 1 + 4 + 1 + 8 + 8 = 32 bytes
 HEADER_STRUCT = struct.Struct("!8sHBIxQQ")
 HEADER_SIZE = HEADER_STRUCT.size
-MAGIC = b'PACKICE!'
+MAGIC = b'FRUINA!!'
 ALIGNMENT = 4096
 FLAG_SEALED = 0x01
 

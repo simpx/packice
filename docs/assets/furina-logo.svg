@@ -1,0 +1,41 @@
+<svg width="480" height="320" viewBox="0 0 480 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#E8F4FF" stop-opacity="0.9"/>
+      <stop offset="100%" stop-color="#D9EEFF" stop-opacity="0.9"/>
+    </linearGradient>
+    <radialGradient id="halo" cx="0.5" cy="0.35" r="0.7">
+      <stop offset="0%" stop-color="#8AD7FF" stop-opacity="0.65"/>
+      <stop offset="100%" stop-color="#1E6FBF" stop-opacity="0.05"/>
+    </radialGradient>
+    <linearGradient id="wave" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#7EE3FF"/>
+      <stop offset="100%" stop-color="#2D7BE7"/>
+    </linearGradient>
+    <linearGradient id="crest" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0%" stop-color="#F8FEFF"/>
+      <stop offset="100%" stop-color="#A8E3FF"/>
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="160%" color-interpolation-filters="sRGB">
+      <feDropShadow dx="0" dy="14" stdDeviation="18" flood-color="#1E6FBF" flood-opacity="0.16"/>
+    </filter>
+  </defs>
+
+  <rect width="480" height="320" rx="26" fill="url(#bg)"/>
+  <g filter="url(#shadow)">
+    <circle cx="240" cy="152" r="110" fill="url(#halo)"/>
+    <path d="M172 204C196 186 224 176 248 176C276 176 300 184 322 201C334 211 348 212 356 205C365 197 358 182 343 170C314 147 279 136 246 136C214 136 189 145 162 165C136 184 132 213 149 229C160 240 177 237 189 225C209 205 228 192 246 188C261 184 278 186 296 196" fill="#E7F8FF" opacity="0.7"/>
+    <path d="M168 208C199 189 228 178 254 178C280 178 306 186 328 200C340 208 355 208 364 198C372 188 365 172 352 162C323 140 283 128 244 128C206 128 173 142 146 163C120 183 118 214 137 233C150 247 170 245 184 232C205 211 226 198 246 194C263 190 283 194 302 204" fill="url(#wave)" stroke="#0E74C8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M292 120C276 130 264 148 262 166C260 184 269 196 282 198C298 200 312 186 320 164C328 142 334 130 348 118" fill="url(#crest)" stroke="#0E74C8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <path d="M214 118C204 129 200 144 206 156C212 168 228 172 244 170C260 168 274 160 282 150C292 138 296 123 294 110" fill="#F4FDFF" stroke="#0E74C8" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
+    <circle cx="210" cy="96" r="12" fill="#FDFEFF" stroke="#0E74C8" stroke-width="4"/>
+    <path d="M212 88C216 90 220 95 220 100C220 105 216 110 212 112C208 110 204 105 204 100C204 95 208 90 212 88Z" fill="#7EE3FF"/>
+    <circle cx="326" cy="142" r="10" fill="#FDFEFF" stroke="#0E74C8" stroke-width="3"/>
+    <circle cx="182" cy="146" r="8" fill="#FDFEFF" stroke="#0E74C8" stroke-width="3"/>
+  </g>
+
+  <g transform="translate(120, 240)">
+    <rect x="0" y="0" width="240" height="48" rx="14" fill="#0E74C8"/>
+    <text x="120" y="32" text-anchor="middle" font-family="'Inter', 'Segoe UI', sans-serif" font-weight="700" font-size="28" fill="#FDFEFF">FURINA</text>
+  </g>
+</svg>

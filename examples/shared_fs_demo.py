@@ -5,11 +5,11 @@ import shutil
 import tempfile
 import logging
 
-# Add the project root to sys.path to allow importing packice
+# Add the project root to sys.path to allow importing fruina
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-import packice
-from packice.peers.shared_fs import SharedFSPeer
+import fruina
+from fruina.peers.shared_fs import SharedFSPeer
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
@@ -17,7 +17,7 @@ logger = logging.getLogger("SharedFSDemo")
 
 def main():
     # 1. Setup shared directory
-    shared_dir = tempfile.mkdtemp(prefix="packice_shared_")
+    shared_dir = tempfile.mkdtemp(prefix="fruina_shared_")
     logger.info(f"Created shared directory: {shared_dir}")
 
     try:
@@ -33,7 +33,7 @@ def main():
         logger.info("Started Peer 2")
 
         # 3. Connect Client to Peer 1
-        client1 = packice.connect(peer1)
+        client1 = fruina.connect(peer1)
         logger.info("Connected Client 1 to Peer 1")
 
         # 4. Create Object
@@ -52,7 +52,7 @@ def main():
             logger.info(f"Sealed object: {object_id}")
 
         # 6. Connect Client to Peer 2
-        client2 = packice.connect(peer2)
+        client2 = fruina.connect(peer2)
         logger.info("Connected Client 2 to Peer 2")
 
         # 7. Read Object via Peer 2

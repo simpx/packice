@@ -1,11 +1,11 @@
-# Packice: 解耦与模块化的p2p缓存
+# Fruina: 解耦与模块化的p2p缓存
 
-本文档旨在介绍 Packice 的核心设计理念、架构抽象及开发指南。
+本文档旨在介绍 Fruina 的核心设计理念、架构抽象及开发指南。
 
 ## Part 1: 背景与设计哲学 (The Why & Philosophy)
 
 ### 1. 定义
-Packice 是一个灵活的、"Batteries-included" 的 P2P 缓存系统。
+Fruina 是一个灵活的、"Batteries-included" 的 P2P 缓存系统。
 
 ### 2. 核心痛点
 *   **缺乏统一抽象**: 没有统一抽象，容易出错。
@@ -21,7 +21,7 @@ Packice 是一个灵活的、"Batteries-included" 的 P2P 缓存系统。
 
 ## Part 2: 核心抽象 (Core Abstractions)
 
-位于 `packice/core/`，这是理解系统的关键。
+位于 `fruina/core/`，这是理解系统的关键。
 
 ### 1. Peer (管理者)
 *   **角色**: 大脑。
@@ -108,7 +108,7 @@ Packice 是一个灵活的、"Batteries-included" 的 P2P 缓存系统。
 以 "Client A 创建 -> Client B 读取" 为例：
 
 1.  **Connect**: 
-    *   `client = packice.connect("protocol://...")` (自动适配 Transport)。
+    *   `client = fruina.connect("protocol://...")` (自动适配 Transport)。
 2.  **Acquire (Create)**:
     *   Client 发送请求 -> Transport 解析 -> Peer 分配 Lease -> Peer 创建空的 Object/Blob -> 返回 Object/Lease -> Transport 解析 -> client 拿到响应
 3.  **IO (Write)**:
@@ -126,7 +126,7 @@ Packice 是一个灵活的、"Batteries-included" 的 P2P 缓存系统。
 
 ## Part 4: 进阶流程 (Tiered Storage)
 
-Packice 的架构设计以 `Peer` 为核心交互单元。利用其强大的组合性 (Composability)，我们可以将多个基础 Peer 封装为一个复合 Peer，从而实现复杂的存储策略。以 **TieredPeer (Memory + Disk)** 为例，它作为协调者管理着 Hot Peer (内存) 与 Cold Peer (磁盘) 之间的数据流转与生命周期。以下是分级存储的具体实现流程：
+Fruina 的架构设计以 `Peer` 为核心交互单元。利用其强大的组合性 (Composability)，我们可以将多个基础 Peer 封装为一个复合 Peer，从而实现复杂的存储策略。以 **TieredPeer (Memory + Disk)** 为例，它作为协调者管理着 Hot Peer (内存) 与 Cold Peer (磁盘) 之间的数据流转与生命周期。以下是分级存储的具体实现流程：
 
 1.  **Write**:
     *   Client 请求写入 -> TieredPeer 优先在 **Hot Peer (Memory)** 分配空间 -> Client 极速写入内存。
@@ -147,24 +147,24 @@ Packice 的架构设计以 `Peer` 为核心交互单元。利用其强大的组�
 "如果我要加功能，我该改哪里？"
 
 ### 目录结构
-*   `packice/core/`: 核心接口 (Peer, Blob, Lease)。
-*   `packice/backends/`: Blob和Lease在不同系统中的实现 (Memory, FS, SharedFS)。
-*   `packice/peers/`: Peer 逻辑实现 (MemoryPeer, SharedFSPeer)。
-*   `packice/transport/`: 协议适配 (HTTP, UDS, Direct)。
-*   `packice/interface/`: 用户接口 (Client, CLI)。
+*   `fruina/core/`: 核心接口 (Peer, Blob, Lease)。
+*   `fruina/backends/`: Blob和Lease在不同系统中的实现 (Memory, FS, SharedFS)。
+*   `fruina/peers/`: Peer 逻辑实现 (MemoryPeer, SharedFSPeer)。
+*   `fruina/transport/`: 协议适配 (HTTP, UDS, Direct)。
+*   `fruina/interface/`: 用户接口 (Client, CLI)。
 
 ### 扩展场景指南
 
 #### 场景 A: "我想支持把数据存到 S3 上"
-*   **去哪里**: `packice/backends/`
+*   **去哪里**: `fruina/backends/`
 *   **做什么**: 继承 `Blob` 实现 `S3Blob`。
 
 #### 场景 B: "我想用 gRPC 替换 HTTP"
-*   **去哪里**: `packice/transport/`
+*   **去哪里**: `fruina/transport/`
 *   **做什么**: 实现 `GrpcServer` 和 `GrpcTransport`，调用现有的 `Peer` 接口。
 
 #### 场景 C: "我想实现一个冷热分级缓存策略"
-*   **去哪里**: `packice/peers/`
+*   **去哪里**: `fruina/peers/`
 *   **做什么**: 像 `TieredPeer` 一样，组合两个现有的 Peer，在这一层写调度逻辑。
 
 ---
@@ -175,12 +175,12 @@ Packice 的架构设计以 `Peer` 为核心交互单元。利用其强大的组�
 
 ```python
 # 1. 极简的连接方式 (自动识别协议)
-client = packice.connect(peer)
+client = fruina.connect(peer)
 
 # 2. Pythonic 的资源管理 (Context Manager)
 # 自动处理关闭和异常
 with client.create(meta={"ttl": 60}) as obj:
-    obj.write(b"Hello Packice")
+    obj.write(b"Hello Fruina")
     # 3. 显式封存
     obj.seal()
 
@@ -217,4 +217,4 @@ with client.get(obj.id) as obj:
 *   **Q: SharedFS 和普通 FS 有什么区别？**
     *   A: SharedFS 假设多个进程/节点挂载了同一个目录，所以它需要处理跨进程的 Header 同步、锁管理以及基于文件 mtime 的 GC。
 *   **Q：为什么用Python？**
-    *   A：Python实现胶水业务代码非常合适，Packice所在的就是上接应用，下接高效object pool的胶水层。此外，“life is short, I use Python”
+    *   A：Python实现胶水业务代码非常合适，Fruina所在的就是上接应用，下接高效object pool的胶水层。此外，“life is short, I use Python”

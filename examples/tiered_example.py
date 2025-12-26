@@ -4,10 +4,10 @@ import os
 # Add the project root to sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-from packice.peers.memory import MemoryPeer
-from packice.peers.tiered import TieredPeer
-from packice.interface.client import Client
-from packice.transport.direct import DirectTransport
+from fruina.peers.memory import MemoryPeer
+from fruina.peers.tiered import TieredPeer
+from fruina.interface.client import Client
+from fruina.transport.direct import DirectTransport
 
 def main():
     print("=== Tiered Storage Example ===")

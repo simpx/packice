@@ -1,7 +1,7 @@
-# Packice Design
+# Fruina Design
 
 ## Definition
-Packice is a flexible, batteries-included peer-to-peer cache system. Its flexible architecture separates the core logic (Peer, Lease, Object) from the implementation details (Backends, Transport), making it convenient to define new modules and functionalities. Being batteries-included, it provides ready-to-use implementations like in-memory Packice and Redis versions out of the box.
+Fruina is a flexible, batteries-included peer-to-peer cache system. Its flexible architecture separates the core logic (Peer, Lease, Object) from the implementation details (Backends, Transport), making it convenient to define new modules and functionalities. Being batteries-included, it provides ready-to-use implementations like in-memory Fruina and Redis versions out of the box.
 
 ## Architecture Overview
 
@@ -18,7 +18,7 @@ The system is divided into six distinct layers:
 
 ## 1. Core Layer
 
-Located in `packice/core/`.
+Located in `fruina/core/`.
 
 ### Blob (`core/blob.py`)
 Abstracts a contiguous chunk of data. Represents a self-contained data source.
@@ -47,7 +47,7 @@ The central coordinator.
 
 ## 2. Backends Layer
 
-Located in `packice/backends/`.
+Located in `fruina/backends/`.
 
 ### File System (`backends/fs.py`)
 - **FileBlob**: Stores blob in a local file system.
@@ -63,7 +63,7 @@ Located in `packice/backends/`.
 
 ## 3. Peers Layer
 
-Located in `packice/peers/`.
+Located in `fruina/peers/`.
 
 **Role**: Provides concrete implementations of the `Peer` interface. This is where "business logic" and "composition" happen.
 
@@ -78,7 +78,7 @@ Located in `packice/peers/`.
 
 ## 4. P2P Layer (Planned)
 
-Located in `packice/p2p/`.
+Located in `fruina/p2p/`.
 
 **Role**: Manages distributed capabilities, transforming single nodes into a loose P2P network.
 
@@ -90,7 +90,7 @@ Located in `packice/p2p/`.
 
 ## 5. Transport Layer
 
-Located in `packice/transport/`.
+Located in `fruina/transport/`.
 
 **Role**: Adapts the Core Peer to specific network protocols. Exposes Peer capabilities through different interfaces.
 **Key Design Principle**: Transports are **Adapters**, not Consumers. They use the `Peer` API directly to get handles and pass them to the client. They do **not** use the SDK Client.
@@ -117,17 +117,17 @@ Located in `packice/transport/`.
 
 ## 6. Interface Layer
 
-Located in `packice/interface/`.
+Located in `fruina/interface/`.
 
 This layer groups all user-facing components, including the CLI, Client SDK, and Integrations.
 
 ### CLI (`interface/cli.py`)
 - **Role**: The command-line interface for starting the server.
 - **Responsibility**: Instantiates the appropriate `Peer` (e.g., `MemoryPeer` or `FileSystemPeer`) and wraps it with a Transport (HTTP or UDS).
-- **Usage**: `python -m packice.interface.cli --impl fs --transport http`
+- **Usage**: `python -m fruina.interface.cli --impl fs --transport http`
 
 ### Client (`interface/client.py`)
-- **Unified Entry Point**: `packice.connect(target)`.
+- **Unified Entry Point**: `fruina.connect(target)`.
 - **Auto-Detection**:
     - `connect()`: Creates a private, isolated in-memory Peer.
     - `connect("memory://name")`: Connects to a shared in-process Peer (DuckDB style).
@@ -136,5 +136,5 @@ This layer groups all user-facing components, including the CLI, Client SDK, and
 - **Direct Access**: Can wrap a `Peer` instance directly (`DirectTransport`) for zero-overhead in-process usage.
 
 ### Integrations (`interface/integrations/`)
-- **Role**: Bridges the gap between user applications and Packice.
+- **Role**: Bridges the gap between user applications and Fruina.
 - **Examples**: PyTorch Dataset loaders, vLLM model loaders.
